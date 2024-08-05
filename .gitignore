@@ -156,3 +156,5 @@ cython_debug/
 
 .idea/
 logs/
+run.sh
+train.sh
