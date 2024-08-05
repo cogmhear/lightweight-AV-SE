@@ -29,7 +29,7 @@ class AudioDecoder(nn.ConvTranspose1d):
     def __init__(self, *args, **kwargs):
         super(AudioDecoder, self).__init__(*args, **kwargs)
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         x = super().forward(x if x.dim() == 3 else torch.unsqueeze(x, 1))
         if torch.squeeze(x).dim() == 1:
             x = torch.squeeze(x, dim=1)
@@ -42,7 +42,7 @@ class VisualFeatNet(nn.Module):
     def __init__(self, relu_type='swish'):
         super(VisualFeatNet, self).__init__()
         self.frontend_nout = 64
-        self.trunk = ResNet(BasicBlock, [1, 1, 1, 1], relu_type=relu_type)
+        self.trunk = ResNet(BasicBlock, [1, 1, 1, 1], relu_type=relu_type, in_channels=self.frontend_nout)
         if relu_type == 'relu':
             frontend_relu = nn.ReLU(True)
         elif relu_type == 'prelu':
@@ -262,7 +262,7 @@ class AVSEModule(LightningModule):
         estimated_audio /= np.max(np.abs(estimated_audio))
         return estimated_audio
 
-    def training_epoch_end(self, outputs):
+    def on_train_epoch_end(self, *args, **kwargs):
         if self.val_dataset is not None:
             with torch.no_grad():
                 tensorboard = self.logger.experiment
@@ -292,8 +292,9 @@ class AVSEModule(LightningModule):
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
-                "scheduler": ReduceLROnPlateau(optimizer, factor=0.8, patience=5),
+                "scheduler": ReduceLROnPlateau(optimizer, factor=0.66, patience=5),
                 "monitor": "val_loss_epoch",
+                "frequency": 1,
             },
         }
 

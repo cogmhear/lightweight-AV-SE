@@ -132,8 +132,8 @@ class BasicBlock(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, relu_type='relu', gamma_zero=False, avg_pool_downsample=False):
-        self.inplanes = 64
+    def __init__(self, block, layers, relu_type='relu', gamma_zero=False, avg_pool_downsample=False, in_channels=64):
+        self.inplanes = in_channels
         self.relu_type = relu_type
         self.gamma_zero = gamma_zero
         self.downsample_block = downsample_basic_block_v2 if avg_pool_downsample else downsample_basic_block
