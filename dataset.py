@@ -14,13 +14,22 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from config import *
-from utils import subsample_list
+
+
+def subsample_list(inp_list: list, sample_rate: float):
+    random.shuffle(inp_list)
+    return [inp_list[i] for i in range(int(len(inp_list) * sample_rate))]
 
 
 class AVSEDataset(Dataset):
     def __init__(self, scenes_root, shuffle=True, seed=SEED, subsample=1,
-                 clipped_batch=True, sample_items=True, test_set=False):
+                 clipped_batch=True, sample_items=True, test_set=False, lips=False):
         super(AVSEDataset, self).__init__()
+        if lips:
+            self.img_width, self.img_height = 96, 96
+        else:
+            self.img_width, self.img_height = 224, 224
+        self.lips = lips
         self.test_set = test_set
         self.clipped_batch = clipped_batch
         self.scenes_root = scenes_root
@@ -48,11 +57,18 @@ class AVSEDataset(Dataset):
         files_list = []
         for file in os.listdir(self.scenes_root):
             if file.endswith("mixed.wav"):
-                files = (join(self.scenes_root, file.replace("mixed", "target")),
-                         join(self.scenes_root, file.replace("mixed", "interferer")),
-                         join(self.scenes_root, file),
-                         join(self.scenes_root, file.replace("_mixed.wav", "_silent.mp4")),
-                         )
+                if self.lips:
+                    files = (join(self.scenes_root, file.replace("mixed", "target")),
+                             join(self.scenes_root, file.replace("mixed", "interferer")),
+                             join(self.scenes_root, file),
+                             join(self.scenes_root.replace("scenes", "lips"), file.replace("_mixed.wav", "_silent.mp4")),
+                             )
+                else:
+                    files = (join(self.scenes_root, file.replace("mixed", "target")),
+                             join(self.scenes_root, file.replace("mixed", "interferer")),
+                             join(self.scenes_root, file),
+                             join(self.scenes_root, file.replace("_mixed.wav", "_silent.mp4")),
+                             )
                 if not self.test_set:
                     if all([isfile(f) for f in files]):
                         files_list.append(files)
@@ -90,26 +106,26 @@ class AVSEDataset(Dataset):
             # clean file for test set is not available
             clean = np.zeros(noisy.shape)
         if self.clipped_batch:
-            if clean.shape[0] > 48000:
-                clip_idx = random.randint(0, clean.shape[0] - 48000)
-                video_idx = int((clip_idx / 16000) * 25)
-                clean = clean[clip_idx:clip_idx + 48000]
-                noisy = noisy[clip_idx:clip_idx + 48000]
+            if clean.shape[0] > max_audio_len:
+                clip_idx = random.randint(0, clean.shape[0] - max_audio_len)
+                video_idx = int((clip_idx / sampling_rate) * frames_per_second)
+                clean = clean[clip_idx:clip_idx + max_audio_len]
+                noisy = noisy[clip_idx:clip_idx + max_audio_len]
             else:
                 video_idx = -1
-                clean = np.pad(clean, pad_width=[0, 48000 - clean.shape[0]], mode="constant")
-                noisy = np.pad(noisy, pad_width=[0, 48000 - noisy.shape[0]], mode="constant")
-            if len(vr) < 75:
+                clean = np.pad(clean, pad_width=[0, max_audio_len - clean.shape[0]], mode="constant")
+                noisy = np.pad(noisy, pad_width=[0, max_audio_len - noisy.shape[0]], mode="constant")
+            if len(vr) < max_frames:
                 frames = vr.get_batch(list(range(len(vr)))).asnumpy()
             else:
-                max_idx = min(video_idx + 75, len(vr))
+                max_idx = min(video_idx + max_frames, len(vr))
                 frames = vr.get_batch(list(range(video_idx, max_idx))).asnumpy()
             bg_frames = np.array(
                 [cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY) for i in range(len(frames))]).astype(np.float32)
             bg_frames /= 255.0
-            if len(bg_frames) < 75:
+            if len(bg_frames) < max_frames:
                 bg_frames = np.concatenate(
-                    (bg_frames, np.zeros((75 - len(bg_frames), img_height, img_width)).astype(bg_frames.dtype)),
+                    (bg_frames, np.zeros((max_frames - len(bg_frames), self.img_height, self.img_width)).astype(bg_frames.dtype)),
                     axis=0)
         else:
             frames = vr.get_batch(list(range(len(vr)))).asnumpy()
@@ -120,13 +136,14 @@ class AVSEDataset(Dataset):
 
 
 class AVSEDataModule(LightningDataModule):
-    def __init__(self, batch_size=16):
+    def __init__(self, batch_size=16, lips=False):
         super(AVSEDataModule, self).__init__()
-        self.train_dataset_batch = AVSEDataset(join(DATA_ROOT, "train/scenes"))
-        self.dev_dataset_batch = AVSEDataset(join(DATA_ROOT, "dev/scenes"))
-        self.dev_dataset = AVSEDataset(join(DATA_ROOT, "dev/scenes"), clipped_batch=False, sample_items=False)
-        self.eval_dataset = AVSEDataset(join(DATA_ROOT, "eval/scenes"), clipped_batch=False, sample_items=False,
-                                        test_set=True)
+        self.train_dataset_batch = AVSEDataset(join(DATA_ROOT, "train/scenes"), lips=lips)
+        self.dev_dataset_batch = AVSEDataset(join(DATA_ROOT, "dev/scenes"), lips=lips)
+        self.dev_dataset = AVSEDataset(join(DATA_ROOT, "dev/scenes"), clipped_batch=False,
+                                       sample_items=False, lips=lips)
+        self.eval_dataset = AVSEDataset(join(DATA_ROOT, "dev/scenes"), clipped_batch=False,
+                                        sample_items=False, lips=lips, test_set=True)
         self.batch_size = batch_size
 
     def train_dataloader(self):
@@ -146,9 +163,10 @@ class AVSEDataModule(LightningDataModule):
 
 if __name__ == '__main__':
 
-    dataset = AVSEDataModule(batch_size=1).train_dataset_batch
+    dataset = AVSEDataModule(batch_size=1, lips=False).train_dataset_batch
     for i in tqdm(range(len(dataset)), ascii=True):
         data = dataset[i]
         for k, v in data.items():
-            print(k, v)
+            if type(v) == np.ndarray:
+                print(k, v.shape, "Max:-", v.max(), "Min:-", v.min())
         break
