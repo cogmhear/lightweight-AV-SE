@@ -1,4 +1,4 @@
-## <a href="arxiv.org">A Lightweight Real-time Audio-Visual Speech Enhancement Framework</a>
+## A Lightweight Real-time Audio-Visual Speech Enhancement Framework
 
 ## Requirements
 * Python >= 3.9
