@@ -23,7 +23,7 @@ def subsample_list(inp_list: list, sample_rate: float):
 
 class AVSEDataset(Dataset):
     def __init__(self, scenes_root, shuffle=True, seed=SEED, subsample=1,
-                 clipped_batch=True, sample_items=True, test_set=False, lips=False):
+                 clipped_batch=True, sample_items=True, test_set=False, lips=False, rgb=False):
         super(AVSEDataset, self).__init__()
         if lips:
             self.img_width, self.img_height = 96, 96
@@ -50,6 +50,7 @@ class AVSEDataset(Dataset):
         self.seed = seed
         self.window = "hann"
         self.fading = False
+        self.rgb = rgb
         self.sample_items = sample_items
 
     @property
@@ -120,19 +121,33 @@ class AVSEDataset(Dataset):
             else:
                 max_idx = min(video_idx + max_frames, len(vr))
                 frames = vr.get_batch(list(range(video_idx, max_idx))).asnumpy()
-            bg_frames = np.array(
-                [cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY) for i in range(len(frames))]).astype(np.float32)
+            if not self.rgb:
+                bg_frames = np.array(
+                    [cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY) for i in range(len(frames))]).astype(np.float32)
+            else:
+                bg_frames = np.array(frames).astype(np.float32)
             bg_frames /= 255.0
             if len(bg_frames) < max_frames:
-                bg_frames = np.concatenate(
-                    (bg_frames, np.zeros((max_frames - len(bg_frames), self.img_height, self.img_width)).astype(bg_frames.dtype)),
-                    axis=0)
+                if not self.rgb:
+                    bg_frames = np.concatenate(
+                        (bg_frames, np.zeros((max_frames - len(bg_frames), self.img_height, self.img_width)).astype(bg_frames.dtype)),
+                        axis=0)
+                else:
+                    bg_frames = np.concatenate(
+                        (bg_frames, np.zeros((max_frames - len(bg_frames), self.img_height, self.img_width, 3)).astype(bg_frames.dtype)),
+                        axis=0)
         else:
             frames = vr.get_batch(list(range(len(vr)))).asnumpy()
-            bg_frames = np.array(
-                [cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY) for i in range(len(frames))]).astype(np.float32)
+            if not self.rgb:
+                bg_frames = np.array(
+                    [cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY) for i in range(len(frames))]).astype(np.float32)
+            else:
+                bg_frames = np.array(frames).astype(np.float32)
             bg_frames /= 255.0
-        return noisy, clean, bg_frames[np.newaxis, ...]
+        if not self.rgb:
+            return noisy, clean, bg_frames[np.newaxis, ...]
+        else:
+            return noisy, clean, bg_frames.transpose(0, 3, 1, 2)
 
 
 class AVSEDataModule(LightningDataModule):
@@ -142,7 +157,7 @@ class AVSEDataModule(LightningDataModule):
         self.dev_dataset_batch = AVSEDataset(join(DATA_ROOT, "dev/scenes"), lips=lips)
         self.dev_dataset = AVSEDataset(join(DATA_ROOT, "dev/scenes"), clipped_batch=False,
                                        sample_items=False, lips=lips)
-        self.eval_dataset = AVSEDataset(join(DATA_ROOT, "dev/scenes"), clipped_batch=False,
+        self.eval_dataset = AVSEDataset(join(DATA_ROOT, "eval/scenes"), clipped_batch=False,
                                         sample_items=False, lips=lips, test_set=True)
         self.batch_size = batch_size
 

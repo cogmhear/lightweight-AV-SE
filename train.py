@@ -2,7 +2,7 @@ import argparse
 
 import numpy as np
 import torch
-
+torch.set_float32_matmul_precision('medium')
 from config import SEED
 
 # fix random seeds for reproducibility
@@ -17,15 +17,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 
 from dataset import AVSEDataModule
 from model import AVSEModule
-
-
-def str2bool(v: str):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+from utils.generic import str2bool
 
 
 def main(args):
@@ -44,7 +36,7 @@ def main(args):
                       gradient_clip_val=args.gradient_clip_val, sync_batchnorm=True,
                       profiler=args.profiler,
                       )
-    trainer.fit(model, datamodule)
+    trainer.fit(model, datamodule, ckpt_path=args.ckpt_path)
 
 
 if __name__ == '__main__':

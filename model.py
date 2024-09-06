@@ -208,7 +208,7 @@ class AVSE(nn.Module):
         self.audio_encoder = AudioEncoder(kernel_size=16, out_channels=256)
         self.audio_decoder = AudioDecoder(in_channels=256, out_channels=1, kernel_size=16, stride=8, bias=False)
         self.visual_encoder = VisualFeatNet()
-        self.separator = Separator(512, 64, 128, num_layers=6, bidirectional=False)
+        self.separator = Separator(512, 128, 256, num_layers=6, bidirectional=False)
 
     def forward(self, input):
         noisy = input["noisy_audio"]
@@ -297,14 +297,3 @@ class AVSEModule(LightningModule):
                 "frequency": 1,
             },
         }
-
-
-if __name__ == '__main__':
-    inp_vis = torch.randn(1, 1, 1, 96, 96) # lip images
-    inp = torch.randn(1, 512)
-    state = torch.randn(6, 200, 128)
-    model = AVSEModule()
-    start = time.time()
-    out, state = model({"noisy_audio": inp, "video_frames": inp_vis, "state": state})
-    print("Time taken", time.time() - start, "sec")
-    print(out.shape)

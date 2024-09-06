@@ -158,3 +158,6 @@ cython_debug/
 logs/
 run.sh
 train.sh
+test.sh
+log.md
+model2.py

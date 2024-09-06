@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torchvision
 
 
 def get_mask(source, source_lengths):
@@ -182,3 +183,22 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         return x
+
+
+class ShuffleNet(nn.Module):
+    def __init__(self):
+        super(ShuffleNet, self).__init__()
+        self.model = nn.Sequential(
+            torchvision.models.shufflenet_v2_x0_5(weights=None, num_classes=512),
+            nn.Linear(512, 256, bias=False),
+            nn.PReLU(),
+            nn.LayerNorm(256))
+
+    def forward(self, x):
+        B, N, C, H, W = x.shape
+        return self.model(x.reshape(B * N, C, H, W)).reshape(B, N, -1)
+
+if __name__ == "__main__":
+    model = ShuffleNet()
+    result = model(torch.rand(1, 75, 3, 96, 96))
+    print(result.shape)

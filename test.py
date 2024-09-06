@@ -12,14 +12,14 @@ from config import sampling_rate
 
 from dataset import AVSEDataModule
 from model import AVSEModule
-from utils import str2bool
+from utils.generic import str2bool
 
 
 def main(args):
     enhanced_root = join(args.save_root, args.model_uid)
     makedirs(args.save_root, exist_ok=True)
     makedirs(enhanced_root, exist_ok=True)
-    datamodule = AVSEDataModule(batch_size=1)
+    datamodule = AVSEDataModule(batch_size=1, lips=args.lips)
     if args.dev_set and args.eval_set:
         raise RuntimeError("Select either dev set or test set")
     elif args.dev_set:
@@ -54,5 +54,6 @@ if __name__ == '__main__':
     parser.add_argument("--dev_set", type=str2bool, default=False, help="Evaluate model on dev set")
     parser.add_argument("--eval_set", type=str2bool, default=False, help="Evaluate model on eval set")
     parser.add_argument("--cpu", type=str2bool, required=False, help="Evaluate model on CPU")
+    parser.add_argument("--lips", type=str2bool, default=False, help="Use lips data")
     args = parser.parse_args()
     main(args)
